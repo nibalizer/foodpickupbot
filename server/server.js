@@ -16,7 +16,11 @@ const app = express();
 const accountSid = process.env.TWILIO_ACCOUNT_SID
 const authToken = process.env.TWILIO_AUTH_TOKEN
 const myNumber = process.env.MY_NUMBER
+const restaurantNumber = process.env.RESTAURANT_NUMBER
 const client = require('twilio')(accountSid, authToken);
+
+
+var customers = [];
 
 // enable parsing of http request body
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -29,9 +33,17 @@ app.use('/swagger', swaggerRoutes);
 app.post('/submit-form', (req, res) => {
   const customerName = req.body.name
   const pickupTime = req.body.pickupTime
-  const phoneNumber = req.body.phoneNumber
-    console.log(`Customer order recieved: the username is ${customerName}`)
-    var customerMsg = `Twilio: Hi ${customerName}, your order is recieved. It will be ready at ${pickupTime}`
+  const meal = req.body.meal
+  const phoneNumber = "+1" + req.body.phoneNumber
+    customers.push({
+      customerName: customerName,
+      pickupTime: pickupTime,
+      meal: meal,
+      phoneNumber: phoneNumber,
+    })
+
+    console.log(`Customer order received: the username is ${customerName}`)
+    var customerMsg = `Twilio: Hi ${customerName}, your order is received. It will be ready at ${pickupTime}`
     console.log("debug: customerMsg", customerMsg)
 
 
@@ -39,38 +51,37 @@ app.post('/submit-form', (req, res) => {
       .create({
          body: customerMsg,
          from: '+1' + myNumber,
-         to: '+1' + phoneNumber
+         to: phoneNumber
        })
       .then(message => console.log(message.sid));
 
   res.end()
 })
 
-/*
-ToCountry: 'US',
-ToState: 'MN',
-SmsMessageSid: 'SM76144d7c789fc03cde59c17a45d072b6',
-NumMedia: '0',
-ToCity: 'STAPLES'
-FromZip: '92106',
-SmsSid: 'SM76144d7c789fc03cde59c17a45d072b6',
-FromState: 'CA',
-SmsStatus: 'received',
-FromCity: 'SAN DIEGO',
-Body: 'Test ',
-FromCountry: 'US',
-To: '+12182969208',
-ToZip: '56479',
-NumSegments: '1',
-MessageSid: 'SM76144d7c789fc03cde59c17a45d072b6',
-AccountSid: 'AC59060ed343ba7e3f737692404377fce3',
-From: '+16199807820',
-ApiVersion: '2010-04-01'
-*/
-
 app.post('/twilio/newdata', (req, res) =>{
   console.log(req.body)
-  res.send(200)
+
+  // tell the restaurant that we're in parking space 4
+  var textMessage = req.body.Body
+  var parkingSpace = parseInt(textMessage)
+  if (0 < parkingSpace && parkingSpace < 10) {
+    var fromNumber = req.body.From
+    var customer = customers.find(e => e.phoneNumber == fromNumber)
+    console.log("DEBUG customer:", customer)
+    var msg = `Bring out ${customer.meal} for ${customer.customerName} in parking space ${parkingSpace}`
+    console.log("DEBUG msg:", msg)
+    client.messages
+      .create({
+         body: msg,
+         from: '+1' + myNumber,
+         to: '+1' + restaurantNumber,
+       })
+      .then(message => console.log(message.sid));
+  }
+
+
+
+  res.send("We'll be right out")
 })
 
 
